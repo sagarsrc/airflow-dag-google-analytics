@@ -31,4 +31,5 @@ jobs:
           gcloud composer environments storage dags import \
             --environment dag-airflow \
             --location us-central1 \
-            --source ./dags/
+            --source ./dags/* \
+            --destination /dags/
