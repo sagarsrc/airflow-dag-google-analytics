@@ -28,8 +28,10 @@ jobs:
 
       - name: Import DAGs to Cloud Composer
         run: |
-          gcloud composer environments storage dags import \
-            --environment dag-airflow \
-            --location us-central1 \
-            --source ./dags/* \
-            --destination /dags/
+          for dir in ./dags/*/; do
+            gcloud composer environments storage dags import \
+              --environment dag-airflow \
+              --location us-central1 \
+              --source "$dir" \
+              --destination "/dags/$(basename $dir)"
+          done
