@@ -33,5 +33,5 @@ jobs:
               --environment dag-airflow \
               --location us-central1 \
               --source "$dir" \
-              --destination "/dags/$(basename $dir)"
+              --destination "$(basename $dir)"
           done
