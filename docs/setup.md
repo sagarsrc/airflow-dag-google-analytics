@@ -1,21 +1,10 @@
-# Task
-
-**Data Pipelines**
-Create the following dag that takes the data from `google-analytics-events` and dumps it to `bigquery`
-Go through the following README for the implementation steps and demo examples
-https://github.com/yral-dapp/data-science-directed-acyclic-graphs/blob/main/README.md
-
 # Steps to setup GCP for the task
 
 1. Create a new project
-2. Enable the APIs for the project
-   - Google Analytics API
-   - BigQuery API
-   - Cloud Storage API
-   - Cloud Composer API (for airflow)
-3. Create a service account
-4. Store secret key json in the secrets folder
-5. Create Cloud Composer (airflow) environment
+2. Create a service account
+3. Run `gcp_commands.sh` to setup the permissions for the service account and then setup cloud composer environment
+4. Create Cloud Composer (airflow) environment
+5. Store secret key json in the secrets folder
 
 # Steps to get Analytics data
 
