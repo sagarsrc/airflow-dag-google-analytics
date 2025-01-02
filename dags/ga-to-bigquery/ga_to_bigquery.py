@@ -1,5 +1,5 @@
 from airflow import DAG
-from airflow.operators.python_operator import PythonOperator
+from airflow.operators.python import PythonOperator
 from datetime import datetime
 
 
@@ -17,9 +17,10 @@ default_args = {
 }
 
 dag = DAG(
-    "hello_world_dag",
+    "new_hello_world_dag",
     default_args=default_args,
     schedule_interval="@daily",
+    catchup=False,
 )
 
 hello_task = PythonOperator(
