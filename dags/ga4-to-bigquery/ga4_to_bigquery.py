@@ -16,6 +16,7 @@ from google.analytics.data_v1beta.types import (
     Metric,
     RunReportRequest,
 )
+import os
 
 default_args = {
     "owner": "airflow",
@@ -38,50 +39,65 @@ dag = DAG(
 
 def extract_ga4_data(**context):
     """Extract data from GA4 and save to a temporary file."""
-    # Get yesterday's date
-    yesterday = context["execution_date"].date() - timedelta(days=1)
-    yesterday_str = yesterday.strftime("%Y-%m-%d")
-
-    # Initialize GA4 client
-    client = BetaAnalyticsDataClient()
-
-    # Build request
-    request = RunReportRequest(
-        property=f"properties/445872593",  # Replace with your GA4 property ID
-        dimensions=[
-            Dimension(name="city"),
-            Dimension(name="date"),  # Adding date dimension
-        ],
-        metrics=[
-            Metric(name="activeUsers"),
-            Metric(name="sessions"),
-            Metric(name="screenPageViews"),
-        ],
-        date_ranges=[DateRange(start_date=yesterday_str, end_date=yesterday_str)],
-    )
-
-    # Run report
-    response = client.run_report(request)
-
-    # Convert to DataFrame
-    data = []
-    for row in response.rows:
-        data.append(
-            {
-                "city": row.dimension_values[0].value,
-                "date": row.dimension_values[1].value,
-                "activeUsers": int(row.metric_values[0].value),
-                "sessions": int(row.metric_values[1].value),
-                "screenPageViews": int(row.metric_values[2].value),
-            }
+    try:
+        # Get service account credentials from environment variable
+        os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = os.environ.get(
+            "GCP_SERVICE_ACCOUNT_SECRET"
         )
 
-    df = pd.DataFrame(data)
+        # Get yesterday's date
+        yesterday = context["execution_date"].date() - timedelta(days=1)
+        yesterday_str = yesterday.strftime("%Y-%m-%d")
 
-    # Save to temporary file
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".json") as temp_file:
-        df.to_json(temp_file.name, orient="records", lines=True)
-        return temp_file.name
+        # Initialize GA4 client
+        client = BetaAnalyticsDataClient()
+
+        # Build request
+        request = RunReportRequest(
+            property=f"properties/445872593",  # Your GA4 property ID
+            dimensions=[
+                Dimension(name="city"),
+                Dimension(name="date"),
+            ],
+            metrics=[
+                Metric(name="activeUsers"),
+                Metric(name="sessions"),
+                Metric(name="screenPageViews"),
+            ],
+            date_ranges=[DateRange(start_date=yesterday_str, end_date=yesterday_str)],
+        )
+
+        # Run report
+        response = client.run_report(request)
+
+        # Convert to DataFrame
+        data = []
+        for row in response.rows:
+            data.append(
+                {
+                    "city": row.dimension_values[0].value,
+                    "date": row.dimension_values[1].value,
+                    "activeUsers": int(row.metric_values[0].value),
+                    "sessions": int(row.metric_values[1].value),
+                    "screenPageViews": int(row.metric_values[2].value),
+                }
+            )
+
+        df = pd.DataFrame(data)
+
+        # Save to temporary file
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".json") as temp_file:
+            df.to_json(temp_file.name, orient="records", lines=True)
+            return temp_file.name
+
+    except Exception as e:
+        print(f"Error type: {type(e)}")
+        print(f"Error message: {str(e)}")
+        print("Please verify:")
+        print("1. Property ID is correct")
+        print("2. Service account has GA4 access")
+        print("3. GCP_SERVICE_ACCOUNT_SECRET environment variable is set correctly")
+        raise
 
 
 # Task 1: Extract GA4 data
