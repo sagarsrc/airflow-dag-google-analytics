@@ -22,8 +22,10 @@ gcloud services enable \
     monitoring.googleapis.com \
     logging.googleapis.com \
     analytics.googleapis.com \
+    analyticsdata.googleapis.com \
     bigquery.googleapis.com
 
+# 4. Add all required IAM roles to your service account for setting up composer environment
 # 4. Add all required IAM roles to your service account for setting up composer environment
 for ROLE in \
 roles/composer.worker \
@@ -50,14 +52,15 @@ roles/cloudscheduler.serviceAgent \
 roles/container.hostServiceAgentUser \
 roles/pubsub.publisher \
 roles/pubsub.subscriber \
-roles/serviceusage.serviceUsageConsumer
+roles/serviceusage.serviceUsageConsumer \
+roles/bigquery.dataEditor \
+roles/storage.objectViewer
 do
     echo "Adding role: $ROLE"
     gcloud projects add-iam-policy-binding $PROJECT_ID \
         --member="serviceAccount:$SERVICE_ACCOUNT" \
         --role="$ROLE"
 done
-
 # 5. Add specific permissions for Google APIs Service Agent
 GOOGLE_APIS_SERVICE_AGENT="$PROJECT_NUMBER@cloudservices.gserviceaccount.com"
 for ROLE in \
@@ -105,3 +108,4 @@ PROJECT_NUMBER=$(gcloud projects describe $PROJECT_ID --format='value(projectNum
 echo "Project Number: $PROJECT_NUMBER"
 
 echo "Setup complete! Please check for any errors above."
+

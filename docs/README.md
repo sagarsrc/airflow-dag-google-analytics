@@ -30,13 +30,6 @@ pkill -f airflow
 
 Upload the DAG to the cloud storage bucket that is being used by the cloud composer environment manually and test
 
-# Setting up CICD
+# CICD
 
-get bucket associated with the cloud composer environment
-
-```bash
-gcloud composer environments describe dag-airflow --location us-central1
-```
-
-us-central1-dag-airflow-840b4971-bucket
-us-central1-dag-airflow-840b4971-bucket
+- setup github actions to deploy the DAG to the cloud storage bucket that is being used by the cloud composer environment

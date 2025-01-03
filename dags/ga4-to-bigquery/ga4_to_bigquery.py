@@ -40,10 +40,15 @@ dag = DAG(
 def extract_ga4_data(**context):
     """Extract data from GA4 and save to a temporary file."""
     try:
-        # Get service account credentials from environment variable
-        os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = os.environ.get(
-            "GCP_SERVICE_ACCOUNT_SECRET"
-        )
+        # Create a temporary credentials file
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".json", delete=False
+        ) as cred_file:
+            cred_file.write(os.environ.get("GCP_SERVICE_ACCOUNT_SECRET"))
+            cred_path = cred_file.name
+
+        # Set credentials environment variable
+        os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = cred_path
 
         # Get yesterday's date
         yesterday = context["execution_date"].date() - timedelta(days=1)
@@ -88,7 +93,11 @@ def extract_ga4_data(**context):
         # Save to temporary file
         with tempfile.NamedTemporaryFile(delete=False, suffix=".json") as temp_file:
             df.to_json(temp_file.name, orient="records", lines=True)
-            return temp_file.name
+
+        # Clean up the temporary credentials file
+        os.unlink(cred_path)
+
+        return temp_file.name
 
     except Exception as e:
         print(f"Error type: {type(e)}")
@@ -96,7 +105,12 @@ def extract_ga4_data(**context):
         print("Please verify:")
         print("1. Property ID is correct")
         print("2. Service account has GA4 access")
-        print("3. GCP_SERVICE_ACCOUNT_SECRET environment variable is set correctly")
+        print(
+            "3. GCP_SERVICE_ACCOUNT_SECRET environment variable contains valid credentials"
+        )
+        # Clean up the temporary credentials file if it exists
+        if "cred_path" in locals():
+            os.unlink(cred_path)
         raise
 
 

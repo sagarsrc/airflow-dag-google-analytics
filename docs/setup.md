@@ -10,8 +10,16 @@
 
 1. Get GA demo account by setting up new demo account using links here [GA demo account](https://support.google.com/analytics/answer/6367342?hl=en#zippy=%2Cin-this-article)
 2. For this project i am using this [Google Merchandise Store's web data](https://analytics.google.com/analytics/index/demoaccount?appstate=/p213025502)
-3. Get property id from Admin > Property > Property Details > Property ID
-4. This property id will be required by airflow to get the data
+3. Get property id it will be required by airflow to get the data
+
+# get oauth2 client credentials
+
+This is required to get the data from external GA account
+
+1. Go to [Google Cloud Console](https://console.cloud.google.com/apis/credentials)
+2. Setup and store OAuth 2.0 Client IDs json in the secrets folder
+
+# Steps to create database for bigquery
 
 # Architecture
 
