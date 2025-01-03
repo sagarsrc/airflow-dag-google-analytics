@@ -50,54 +50,64 @@ def extract_ga4_data(**context):
         # Set credentials environment variable
         os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = cred_path
 
-        # Get yesterday's date
-        yesterday = context["execution_date"].date() - timedelta(days=1)
-        yesterday_str = yesterday.strftime("%Y-%m-%d")
+        try:
+            # Initialize GA4 client
+            client = BetaAnalyticsDataClient()
 
-        # Initialize GA4 client
-        client = BetaAnalyticsDataClient()
+            # Get yesterday's date
+            yesterday = context["execution_date"].date() - timedelta(days=1)
+            yesterday_str = yesterday.strftime("%Y-%m-%d")
 
-        # Build request
-        request = RunReportRequest(
-            property=f"properties/445872593",  # Your GA4 property ID
-            dimensions=[
-                Dimension(name="city"),
-                Dimension(name="date"),
-            ],
-            metrics=[
-                Metric(name="activeUsers"),
-                Metric(name="sessions"),
-                Metric(name="screenPageViews"),
-            ],
-            date_ranges=[DateRange(start_date=yesterday_str, end_date=yesterday_str)],
-        )
-
-        # Run report
-        response = client.run_report(request)
-
-        # Convert to DataFrame
-        data = []
-        for row in response.rows:
-            data.append(
-                {
-                    "city": row.dimension_values[0].value,
-                    "date": row.dimension_values[1].value,
-                    "activeUsers": int(row.metric_values[0].value),
-                    "sessions": int(row.metric_values[1].value),
-                    "screenPageViews": int(row.metric_values[2].value),
-                }
+            # Build request
+            request = RunReportRequest(
+                property=f"properties/445872593",
+                dimensions=[
+                    Dimension(name="city"),
+                    Dimension(name="date"),
+                ],
+                metrics=[
+                    Metric(name="activeUsers"),
+                    Metric(name="sessions"),
+                    Metric(name="screenPageViews"),
+                ],
+                date_ranges=[
+                    DateRange(start_date=yesterday_str, end_date=yesterday_str)
+                ],
             )
 
-        df = pd.DataFrame(data)
+            # Run report
+            response = client.run_report(request)
 
-        # Save to temporary file
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".json") as temp_file:
+            # Convert to DataFrame
+            data = []
+            for row in response.rows:
+                data.append(
+                    {
+                        "city": row.dimension_values[0].value,
+                        "date": row.dimension_values[1].value,
+                        "activeUsers": int(row.metric_values[0].value),
+                        "sessions": int(row.metric_values[1].value),
+                        "screenPageViews": int(row.metric_values[2].value),
+                    }
+                )
+
+            df = pd.DataFrame(data)
+
+            # Save to temporary file (don't delete=False to keep the file)
+            temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".json")
             df.to_json(temp_file.name, orient="records", lines=True)
 
-        # Clean up the temporary credentials file
-        os.unlink(cred_path)
+            # Store the file path in XCom for cleanup in a later task
+            context["task_instance"].xcom_push(
+                key="temp_files", value=[temp_file.name, cred_path]
+            )
 
-        return temp_file.name
+            return temp_file.name
+
+        finally:
+            # Clean up the credentials file
+            if os.path.exists(cred_path):
+                os.unlink(cred_path)
 
     except Exception as e:
         print(f"Error type: {type(e)}")
@@ -108,10 +118,18 @@ def extract_ga4_data(**context):
         print(
             "3. GCP_SERVICE_ACCOUNT_SECRET environment variable contains valid credentials"
         )
-        # Clean up the temporary credentials file if it exists
-        if "cred_path" in locals():
-            os.unlink(cred_path)
         raise
+
+
+def cleanup_temp_files(**context):
+    """Clean up temporary files after GCS upload."""
+    temp_files = context["task_instance"].xcom_pull(
+        key="temp_files", task_ids="extract_ga4_data"
+    )
+    if temp_files:
+        for file_path in temp_files:
+            if os.path.exists(file_path):
+                os.unlink(file_path)
 
 
 # Task 1: Extract GA4 data
@@ -126,18 +144,26 @@ extract_task = PythonOperator(
 upload_to_gcs_task = LocalFilesystemToGCSOperator(
     task_id="upload_to_gcs",
     src="{{ task_instance.xcom_pull(task_ids='extract_ga4_data') }}",
-    dst="ga4_data/{{ ds }}/data.json",  # Uses execution date in path
-    bucket="data-ga4-bucket",  # Replace with your bucket name
+    dst="ga4_data/{{ ds }}/data.json",
+    bucket="your-ga4-data-bucket",
     gcp_conn_id="google_cloud_default",
     dag=dag,
 )
 
-# Task 3: Load to BigQuery
+# Task 3: Cleanup temporary files
+cleanup_task = PythonOperator(
+    task_id="cleanup_temp_files",
+    python_callable=cleanup_temp_files,
+    provide_context=True,
+    dag=dag,
+)
+
+# Task 4: Load to BigQuery
 load_to_bq_task = GCSToBigQueryOperator(
     task_id="load_to_bigquery",
-    bucket=" data-ga4-bucket",
+    bucket="your-ga4-data-bucket",
     source_objects=["ga4_data/{{ ds }}/data.json"],
-    destination_project_dataset_table="dag-task.data-ga4-bucket.ga4_data_${{ ds_nodash }}",  # Partitioned table
+    destination_project_dataset_table="your-project.your_dataset.ga4_data${{ ds_nodash }}",
     source_format="NEWLINE_DELIMITED_JSON",
     write_disposition="WRITE_TRUNCATE",
     schema_fields=[
@@ -151,4 +177,4 @@ load_to_bq_task = GCSToBigQueryOperator(
 )
 
 # Set task dependencies
-extract_task >> upload_to_gcs_task >> load_to_bq_task
+extract_task >> upload_to_gcs_task >> cleanup_task >> load_to_bq_task
