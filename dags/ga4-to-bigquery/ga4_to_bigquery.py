@@ -15,6 +15,7 @@ from google.analytics.data_v1beta.types import (
 )
 import os
 from io import StringIO
+from airflow.providers.google.common.hooks.base_google import GoogleBaseHook
 
 # Constants from your environment
 PROJECT_ID = "dag-task"
@@ -34,22 +35,12 @@ default_args = {
 def extract_and_upload_ga4_data(**context):
     """Extract data from GA4 and upload directly to GCS."""
     try:
-        # Initialize GA4 client with explicit credentials and scopes
-        credentials = {
-            "scopes": [
-                "https://www.googleapis.com/auth/analytics.readonly",
-                "https://www.googleapis.com/auth/analytics",
-                "https://www.googleapis.com/auth/cloud-platform",
-                "https://www.googleapis.com/auth/analytics.edit",
-            ]
-        }
+        # Get credentials from Airflow connection
+        hook = GoogleBaseHook(gcp_conn_id="google_cloud_default")
+        credentials = hook.get_credentials()
 
-        client = BetaAnalyticsDataClient(
-            credentials=context["task"]
-            .get_hook("google_cloud_default")
-            .get_credentials(),
-            client_options=credentials,
-        )
+        # Initialize GA4 client with credentials
+        client = BetaAnalyticsDataClient(credentials=credentials)
 
         # Get yesterday's date
         yesterday = context["execution_date"].date() - timedelta(days=1)
