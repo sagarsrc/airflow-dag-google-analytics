@@ -34,8 +34,22 @@ default_args = {
 def extract_and_upload_ga4_data(**context):
     """Extract data from GA4 and upload directly to GCS."""
     try:
-        # Initialize GA4 client
-        client = BetaAnalyticsDataClient()
+        # Initialize GA4 client with explicit credentials and scopes
+        credentials = {
+            "scopes": [
+                "https://www.googleapis.com/auth/analytics.readonly",
+                "https://www.googleapis.com/auth/analytics",
+                "https://www.googleapis.com/auth/cloud-platform",
+                "https://www.googleapis.com/auth/analytics.edit",
+            ]
+        }
+
+        client = BetaAnalyticsDataClient(
+            credentials=context["task"]
+            .get_hook("google_cloud_default")
+            .get_credentials(),
+            client_options=credentials,
+        )
 
         # Get yesterday's date
         yesterday = context["execution_date"].date() - timedelta(days=1)
