@@ -27,23 +27,23 @@ https://github.com/yral-dapp/data-science-directed-acyclic-graphs/blob/main/READ
 
 - On successful creation of composer environment, your composer environment should look like this:
 
-![composer](https://github.com/sagarsrc/airflow-dag-google-analytics/blob/main/docs/images/composer1.png)
+![composer](https://github.com/sagarsrc/airflow-dag-google-analytics/blob/main/docs/images/composer1.jpg)
 
 - Once you run the dags, your composer environment should look like this:
 
-![composer](https://github.com/sagarsrc/airflow-dag-google-analytics/blob/main/docs/images/composer2.png)
+![composer](https://github.com/sagarsrc/airflow-dag-google-analytics/blob/main/docs/images/composer2.jpg)
 
 - On successful run of the dag, your airflow should look like this:
 
-![airflow](https://github.com/sagarsrc/airflow-dag-google-analytics/blob/main/docs/images/airflow.png)
+![airflow](https://github.com/sagarsrc/airflow-dag-google-analytics/blob/main/docs/images/airflow.jpg)
 
 - GCP bucket which holds events from google analytics should look like this:
 
-![gcp bucket](https://github.com/sagarsrc/airflow-dag-google-analytics/blob/main/docs/images/gcp-ga4-bucket.png)
+![gcp bucket](https://github.com/sagarsrc/airflow-dag-google-analytics/blob/main/docs/images/gcp-ga4-bucket.jpg)
 
 - bucket which holds dags and airflow logs should look like this:
 
-![gcp bucket](https://github.com/sagarsrc/airflow-dag-google-analytics/blob/main/docs/images/gcp-dags-bucket.png)
+![gcp bucket](https://github.com/sagarsrc/airflow-dag-google-analytics/blob/main/docs/images/gcp-dags-bucket.jpg)
 
 # Basic check data sanity
 
