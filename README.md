@@ -118,12 +118,19 @@ Run `test_google_analytics.py` to verify data consistency. Output:
 Cross-verify with BigQuery using:
 
 ```sql
-SELECT date,
-       Sum(activeusers) AS daily_active_users
-FROM   `dag-task.custom_analytics_data.ga4_data`
-WHERE  date BETWEEN '20241216' AND '20241231'
-GROUP  BY date
-ORDER  BY date
+SELECT
+  PARSE_DATE('%Y%m%d', CAST(date AS STRING)) as date_formatted,
+  SUM(activeUsers) as daily_active_users
+FROM
+  `dag-task.custom_analytics_data.ga4_data`
+WHERE
+  PARSE_DATE('%Y%m%d', CAST(date AS STRING))
+    BETWEEN PARSE_DATE('%Y%m%d', '20241216')
+    AND PARSE_DATE('%Y%m%d', '20241231')
+GROUP BY
+  date_formatted
+ORDER BY
+  date_formatted;
 ```
 
 Output:
