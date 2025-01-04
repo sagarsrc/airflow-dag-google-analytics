@@ -119,7 +119,7 @@ Cross-verify with BigQuery using:
 
 ```sql
 SELECT
-  PARSE_DATE('%Y%m%d', CAST(date AS STRING)) as date_formatted,
+  PARSE_DATE('%Y%m%d', CAST(date AS STRING)) as date,
   SUM(activeUsers) as daily_active_users
 FROM
   `dag-task.custom_analytics_data.ga4_data`
