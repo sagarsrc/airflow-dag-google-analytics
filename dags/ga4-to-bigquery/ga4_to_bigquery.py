@@ -169,8 +169,8 @@ with DAG(
     default_args=default_args,
     description="Extract GA4 data and load to BigQuery",
     schedule_interval="@daily",
-    start_date=datetime(2024, 16, 1),
-    end_date=datetime(2024, 30, 4),
+    start_date=datetime(2024, 12, 16),  # YYYY-MM-DD format
+    end_date=datetime(2024, 12, 30),  # YYYY-MM-DD format
     catchup=True,
     max_active_runs=3,
     render_template_as_native_obj=True,
