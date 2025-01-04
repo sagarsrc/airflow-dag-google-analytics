@@ -1,68 +1,106 @@
-# Task
+# Google Analytics to BigQuery Data Pipeline
 
-**Data Pipelines**
-Create the following dag that takes the data from `google-analytics-events` and dumps it to `bigquery`
-Go through the following README for the implementation steps and demo examples
-https://github.com/yral-dapp/data-science-directed-acyclic-graphs/blob/main/README.md
+This project implements an Airflow DAG that extracts data from Google Analytics 4 and loads it into BigQuery.
 
-# setup Airflow and GCP
+## Prerequisites
 
-- follow [setup.md](./setup.md)
+- Python and pip installed
+- Google Cloud Platform account
+- Access to a Google Analytics 4 property
+- Git
 
-# CICD
+## Setup Instructions
 
-- just like copying dags to airflow/dags, setup github actions to push the DAG to the cloud storage bucket that is being used by the cloud composer environment
+### 1. Local Airflow Setup
 
-# Airflow configurations
+```bash
+# Install Apache Airflow
+pip install apache-airflow
 
-- add google service account key to the airflow
-  - Admin > Connections > google_cloud_default > Edit connection > Keyfile JSON > add the service account key
-- add scopes of google analytics to the airflow
+# Set Airflow home directory
+export AIRFLOW_HOME=$(pwd)/airflow
 
-  - Admin > Connections > google_cloud_default > Edit connection > Extra > Scopes > add the following scopes:
-    - use commas to separate the scopes
-    - `https://www.googleapis.com/auth/analytics.readonly,https://www.googleapis.com/auth/cloud-platform,https://www.googleapis.com/auth/analytics`
+# Start Airflow in standalone mode
+airflow standalone
 
-# Screenshots
+# Copy DAGs to Airflow directory
+cp -r dags/* airflow/dags/
 
-On successful creation of composer environment, your composer environment should look like this:
+# Reserialize DAGs
+airflow dags reserialize
 
-<p>
-    <img src="docs/images/composer1.jpg" />
-</p>
+# To stop Airflow when needed
+pkill -f airflow
+```
 
-Once you run the dags, your composer environment should look like this:
+### 2. GCP Project Setup
 
-<p>
-    <img src="docs/images/composer2.jpg" />
-</p>
+1. Create a new GCP project
+2. Create a service account
+3. Execute `gcp_commands.sh` to:
+   - Set up service account permissions
+   - Configure Cloud Composer environment
+4. Create Cloud Composer (Airflow) environment
+5. Store the service account key JSON in the `secrets` folder
 
-On successful run of the dag, your airflow should look like this:
+### 3. Google Analytics OAuth Setup
 
-<p>
-    <img src="docs/images/airflow.jpg" />
-</p>
+1. Visit [Google Cloud Console Credentials](https://console.cloud.google.com/apis/credentials)
+2. Create OAuth 2.0 Client ID with the following scopes:
+   - `https://www.googleapis.com/auth/analytics.readonly`
+   - `https://www.googleapis.com/auth/cloud-platform`
+   - `https://www.googleapis.com/auth/analytics`
+3. Store the OAuth 2.0 Client ID JSON in the `secrets` folder
 
-GCP bucket which holds events from google analytics should look like this:
+### 4. Google Analytics Configuration
 
-<p>
-    <img src="docs/images/gcp-ga4-bucket.jpg" />
-</p>
+1. Link your Analytics account to the GCP project
+2. Note down the property ID
+3. Add the service account email to Analytics account (Property Management Settings)
+4. Run the test script to verify connection
 
-Bucket which holds dags and airflow logs should look like this:
+### 5. Airflow Configuration
 
-<p>
-    <img src="docs/images/gcp-dags-bucket.jpg" />
+1. Configure Google Cloud Connection:
+   - Navigate to Admin > Connections > google_cloud_default
+   - Add service account key JSON
+   - Add Analytics scopes in Extra field:
+     ```
+     https://www.googleapis.com/auth/analytics.readonly,https://www.googleapis.com/auth/cloud-platform,https://www.googleapis.com/auth/analytics
+     ```
 
-</p>
+## CI/CD
 
-# Basic check data sanity
+GitHub Actions workflow automatically pushes DAGs to the Cloud Composer environment's storage bucket.
 
-Run test script
+## Verification
 
-- run the `test_google_analytics.py` file to verify the data is being pulled correctly from big query and google analytics
+### Expected Setup Views
 
-Output :
+1. Cloud Composer Environment:
+
+   Initial setup:
+   ![Initial Composer Setup](docs/images/composer1.jpg)
+
+   After DAG execution:
+   ![Composer After DAG Run](docs/images/composer2.jpg)
+
+2. Airflow Interface:
+
+   Successful DAG run:
+   ![Successful Airflow DAG](docs/images/airflow.jpg)
+
+3. GCP Storage Buckets:
+
+   GA4 Events bucket:
+   ![GA4 Events Bucket](docs/images/gcp-ga4-bucket.jpg)
+
+   DAGs and logs bucket:
+   ![DAGs and Logs Bucket](docs/images/gcp-dags-bucket.jpg)
+
+### Data Validation
+
+Run `test_google_analytics.py` to verify data consistency. Output:
 
 ```bash
          date  activeUsers
@@ -73,15 +111,11 @@ Output :
 4  2024-12-22            2
 5  2024-12-23            1
 6  2024-12-24            2
-8  2024-12-26            6
-12 2024-12-30            1
+7  2024-12-26            6
+8  2024-12-30            1
 ```
 
-Cross verified from google big query
-
-- run the same query in big query to verify the data is being pulled correctly
-
-Query:
+Cross-verify with BigQuery using:
 
 ```sql
 SELECT date,
@@ -89,7 +123,7 @@ SELECT date,
 FROM   `dag-task.custom_analytics_data.ga4_data`
 WHERE  date BETWEEN '20241216' AND '20241231'
 GROUP  BY date
-ORDER  BY date;
+ORDER  BY date
 ```
 
 Output:
@@ -106,3 +140,7 @@ date,daily_active_users
 2024-12-26,6
 2024-12-30,1
 ```
+
+## Note
+
+The Google Analytics demo account cannot be used with the Analytics Data API due to permissions limitations.
