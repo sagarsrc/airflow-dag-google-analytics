@@ -1,14 +1,11 @@
 from airflow import DAG
 from airflow.operators.python import PythonOperator
-from airflow.providers.google.cloud.transfers.local_to_gcs import (
-    LocalFilesystemToGCSOperator,
-)
+from airflow.providers.google.cloud.hooks.gcs import GCSHook
 from airflow.providers.google.cloud.transfers.gcs_to_bigquery import (
     GCSToBigQueryOperator,
 )
 from datetime import datetime, timedelta
 import pandas as pd
-import tempfile
 from google.analytics.data_v1beta import BetaAnalyticsDataClient
 from google.analytics.data_v1beta.types import (
     DateRange,
@@ -17,7 +14,7 @@ from google.analytics.data_v1beta.types import (
     RunReportRequest,
 )
 import os
-import json
+from io import StringIO
 
 # Constants from your environment
 PROJECT_ID = "dag-task"
@@ -34,30 +31,13 @@ default_args = {
 }
 
 
-def create_temp_credentials(**context):
-    """Create temporary credentials file and return its path."""
+def extract_and_upload_ga4_data(**context):
+    """Extract data from GA4 and upload directly to GCS."""
     try:
-        with tempfile.NamedTemporaryFile(
-            mode="w", suffix=".json", delete=False
-        ) as cred_file:
-            cred_file.write(os.environ.get("GCP_SERVICE_ACCOUNT_SECRET"))
-            return cred_file.name
-    except Exception as e:
-        print(f"Error creating credentials file: {str(e)}")
-        raise
-
-
-def extract_ga4_data(**context):
-    """Extract data from GA4 and save to a temporary file."""
-    temp_files = []
-
-    try:
-        # Create temporary credentials file
-        cred_path = create_temp_credentials()
-        temp_files.append(cred_path)
-
-        # Set credentials
-        os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = cred_path
+        # Set credentials from environment variable
+        os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = os.environ.get(
+            "GCP_SERVICE_ACCOUNT_SECRET"
+        )
 
         # Initialize GA4 client
         client = BetaAnalyticsDataClient()
@@ -99,35 +79,28 @@ def extract_ga4_data(**context):
 
         df = pd.DataFrame(data)
 
-        # Save to temporary file
-        data_file = tempfile.NamedTemporaryFile(delete=False, suffix=".json")
-        temp_files.append(data_file.name)
-        df.to_json(data_file.name, orient="records", lines=True)
+        # Convert DataFrame to JSON string
+        json_buffer = StringIO()
+        df.to_json(json_buffer, orient="records", lines=True)
+        json_data = json_buffer.getvalue()
 
-        # Store file paths for cleanup
-        context["task_instance"].xcom_push(key="temp_files", value=temp_files)
+        # Upload directly to GCS using GCSHook
+        gcs_hook = GCSHook(gcp_conn_id="google_cloud_default")
+        gcs_path = f'ga4_data/{context["ds"]}/data.json'
+        gcs_hook.upload(
+            bucket_name=BUCKET_NAME,
+            object_name=gcs_path,
+            data=json_data,
+            encoding="utf-8",
+        )
 
-        return data_file.name
+        # Return the GCS path for the next task
+        return gcs_path
 
     except Exception as e:
         print(f"Error type: {type(e)}")
         print(f"Error message: {str(e)}")
-        # Cleanup in case of error
-        for file_path in temp_files:
-            if os.path.exists(file_path):
-                os.unlink(file_path)
         raise
-
-
-def cleanup_temp_files(**context):
-    """Clean up all temporary files."""
-    temp_files = context["task_instance"].xcom_pull(
-        key="temp_files", task_ids="extract_ga4_data"
-    )
-    if temp_files:
-        for file_path in temp_files:
-            if os.path.exists(file_path):
-                os.unlink(file_path)
 
 
 with DAG(
@@ -139,35 +112,20 @@ with DAG(
     catchup=False,
 ) as dag:
 
-    # Task 1: Extract GA4 data
-    extract_task = PythonOperator(
-        task_id="extract_ga4_data",
-        python_callable=extract_ga4_data,
+    # Task 1: Extract GA4 data and upload to GCS
+    extract_and_upload_task = PythonOperator(
+        task_id="extract_and_upload_ga4_data",
+        python_callable=extract_and_upload_ga4_data,
         provide_context=True,
     )
 
-    # Task 2: Upload to GCS
-    upload_to_gcs_task = LocalFilesystemToGCSOperator(
-        task_id="upload_to_gcs",
-        src="{{ task_instance.xcom_pull(task_ids='extract_ga4_data') }}",
-        dst="ga4_data/{{ ds }}/data.json",
-        bucket=BUCKET_NAME,
-        gcp_conn_id="google_cloud_default",
-    )
-
-    # Task 3: Cleanup temporary files
-    cleanup_task = PythonOperator(
-        task_id="cleanup_temp_files",
-        python_callable=cleanup_temp_files,
-        provide_context=True,
-    )
-
-    # Task 4: Load to BigQuery
+    # Task 2: Load to BigQuery
     load_to_bq_task = GCSToBigQueryOperator(
         task_id="load_to_bigquery",
         bucket=BUCKET_NAME,
-        source_objects=["ga4_data/{{ ds }}/data.json"],
-        # need to create a new table and then use it
+        source_objects=[
+            "{{ task_instance.xcom_pull(task_ids='extract_and_upload_ga4_data') }}"
+        ],
         destination_project_dataset_table=f"{PROJECT_ID}.analytics_data.ga4_data${{{{ ds_nodash }}}}",
         source_format="NEWLINE_DELIMITED_JSON",
         write_disposition="WRITE_TRUNCATE",
@@ -181,4 +139,4 @@ with DAG(
     )
 
     # Set task dependencies
-    extract_task >> upload_to_gcs_task >> cleanup_task >> load_to_bq_task
+    extract_and_upload_task >> load_to_bq_task
