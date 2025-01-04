@@ -182,4 +182,5 @@ with DAG(
         dag=dag,
     )
 
+    # Set the order of tasks
     extract_and_upload_task >> load_task
