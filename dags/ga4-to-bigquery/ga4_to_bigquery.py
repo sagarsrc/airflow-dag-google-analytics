@@ -34,11 +34,6 @@ default_args = {
 def extract_and_upload_ga4_data(**context):
     """Extract data from GA4 and upload directly to GCS."""
     try:
-        # Set credentials from environment variable
-        os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = os.environ.get(
-            "GCP_SERVICE_ACCOUNT_SECRET"
-        )
-
         # Initialize GA4 client
         client = BetaAnalyticsDataClient()
 
@@ -94,7 +89,6 @@ def extract_and_upload_ga4_data(**context):
             encoding="utf-8",
         )
 
-        # Return the GCS path for the next task
         return gcs_path
 
     except Exception as e:
