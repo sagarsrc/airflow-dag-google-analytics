@@ -125,7 +125,7 @@ with DAG(
         source_objects=[
             "{{ task_instance.xcom_pull(task_ids='extract_and_upload_ga4_data') }}"
         ],
-        destination_project_dataset_table=f"{PROJECT_ID}.analytics_data.ga4_data${{{{ ds_nodash }}}}",
+        destination_project_dataset_table=f"{PROJECT_ID}.custom_analytics_data.ga4_data${{{{ ds_nodash }}}}",
         source_format="NEWLINE_DELIMITED_JSON",
         write_disposition="WRITE_TRUNCATE",
         schema_fields=[
