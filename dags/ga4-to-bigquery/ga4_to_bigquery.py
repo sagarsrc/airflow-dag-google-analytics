@@ -130,8 +130,10 @@ with DAG(
     description="Extract GA4 data and load to BigQuery",
     schedule_interval="@daily",
     start_date=datetime(2023, 12, 1),
+    end_date=datetime(2025, 1, 4),  # Added end_date
     catchup=True,
     max_active_runs=3,
+    render_template_as_native_obj=True,  # Added for better template rendering
 ) as dag:
 
     # Task 1: Extract GA4 data and upload to GCS
