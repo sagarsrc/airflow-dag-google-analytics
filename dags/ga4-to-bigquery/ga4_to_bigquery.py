@@ -1,3 +1,4 @@
+import os
 from airflow import DAG
 from airflow.operators.python import PythonOperator
 from airflow.providers.google.cloud.hooks.gcs import GCSHook
@@ -13,7 +14,7 @@ from google.analytics.data_v1beta.types import (
     Metric,
     RunReportRequest,
 )
-import os
+
 from io import StringIO
 from airflow.providers.google.common.hooks.base_google import GoogleBaseHook
 
@@ -27,7 +28,7 @@ default_args = {
     "depends_on_past": False,
     "email_on_failure": False,
     "email_on_retry": False,
-    "retries": 0,
+    "retries": 1,
     "retry_delay": timedelta(minutes=5),
 }
 
@@ -42,9 +43,9 @@ def extract_and_upload_ga4_data(**context):
         # Initialize GA4 client with credentials
         client = BetaAnalyticsDataClient(credentials=credentials)
 
-        # Get yesterday's date
-        yesterday = context["execution_date"].date() - timedelta(days=1)
-        yesterday_str = yesterday.strftime("%Y-%m-%d")
+        # Get the execution date from context
+        execution_date = context["execution_date"].date()
+        date_str = execution_date.strftime("%Y-%m-%d")
 
         # Build request
         request = RunReportRequest(
@@ -58,7 +59,7 @@ def extract_and_upload_ga4_data(**context):
                 Metric(name="sessions"),
                 Metric(name="screenPageViews"),
             ],
-            date_ranges=[DateRange(start_date=yesterday_str, end_date=yesterday_str)],
+            date_ranges=[DateRange(start_date=date_str, end_date=date_str)],
         )
 
         # Run report
@@ -106,9 +107,10 @@ with DAG(
     "ga4_to_bigquery",
     default_args=default_args,
     description="Extract GA4 data and load to BigQuery",
-    schedule_interval="0 1 * * *",
-    start_date=datetime(2024, 12, 1),  # This will start the DAG on December 1, 2024
-    catchup=True,
+    schedule_interval="@daily",  # Changed to @daily for better catchup handling
+    start_date=datetime(2023, 12, 1),  # Set to when you want to start catching up from
+    catchup=True,  # Ensure catchup is enabled
+    max_active_runs=3,  # Limit concurrent runs during catchup
 ) as dag:
 
     # Task 1: Extract GA4 data and upload to GCS
