@@ -27,7 +27,7 @@ default_args = {
     "depends_on_past": False,
     "email_on_failure": False,
     "email_on_retry": False,
-    "retries": 1,  # Added retry
+    "retries": 1,
     "retry_delay": timedelta(minutes=5),
 }
 
@@ -77,26 +77,45 @@ def extract_and_upload_ga4_data(**context):
                 }
             )
 
-        df = pd.DataFrame(data)
+        # Handle empty data case
+        if not data:
+            print(f"No data found for date: {date_str}")
+            # Create DataFrame with one row of zeros to maintain schema
+            data = [
+                {
+                    "city": "NO_DATA",
+                    "date": date_str,
+                    "activeUsers": 0,
+                    "sessions": 0,
+                    "screenPageViews": 0,
+                }
+            ]
 
-        # Convert DataFrame to JSON string
-        # Ensure each record is on a new line and properly formatted
-        json_data = "\n".join(df.apply(lambda x: x.to_json(), axis=1))
+        df = pd.DataFrame(data)
+        print(f"Number of rows in DataFrame: {len(df)}")
+
+        # Convert DataFrame to properly formatted JSONL
+        json_lines = []
+        for _, row in df.iterrows():
+            json_lines.append(row.to_json())
+        json_data = "\n".join(json_lines)
 
         # Debug logging
-        print("Sample of JSON data to be uploaded:")
-        print(json_data[:500])  # Print first 500 characters
+        print("First few rows of JSON data:")
+        print("\n".join(json_lines[:3]))
 
-        # Upload directly to GCS using GCSHook
+        # Upload to GCS using GCSHook
         gcs_hook = GCSHook(gcp_conn_id="google_cloud_default")
         gcs_path = f'ga4_data/{context["ds"]}/data.json'
+
+        # Upload using data parameter
         gcs_hook.upload(
             bucket_name=BUCKET_NAME,
             object_name=gcs_path,
-            data=json_data,
-            encoding="utf-8",
+            data=json_data.encode("utf-8"),  # Convert string to bytes
         )
 
+        print(f"Successfully uploaded data to gs://{BUCKET_NAME}/{gcs_path}")
         return gcs_path
 
     except Exception as e:
@@ -109,10 +128,10 @@ with DAG(
     "ga4_to_bigquery",
     default_args=default_args,
     description="Extract GA4 data and load to BigQuery",
-    schedule_interval="@daily",  # Changed to @daily for better catchup handling
-    start_date=datetime(2023, 12, 1),  # Set to when you want to start catching up from
-    catchup=True,  # Ensure catchup is enabled
-    max_active_runs=3,  # Limit concurrent runs during catchup
+    schedule_interval="@daily",
+    start_date=datetime(2023, 12, 1),
+    catchup=True,
+    max_active_runs=3,
 ) as dag:
 
     # Task 1: Extract GA4 data and upload to GCS
