@@ -107,8 +107,8 @@ with DAG(
     default_args=default_args,
     description="Extract GA4 data and load to BigQuery",
     schedule_interval="0 1 * * *",
-    start_date=datetime(2024, 1, 1),
-    catchup=False,
+    start_date=datetime(2024, 12, 1),  # This will start the DAG on December 1, 2024
+    catchup=True,
 ) as dag:
 
     # Task 1: Extract GA4 data and upload to GCS
