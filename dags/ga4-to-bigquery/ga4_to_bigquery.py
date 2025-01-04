@@ -1,4 +1,3 @@
-import os
 from airflow import DAG
 from airflow.operators.python import PythonOperator
 from airflow.providers.google.cloud.hooks.gcs import GCSHook
@@ -14,7 +13,7 @@ from google.analytics.data_v1beta.types import (
     Metric,
     RunReportRequest,
 )
-
+import os
 from io import StringIO
 from airflow.providers.google.common.hooks.base_google import GoogleBaseHook
 
@@ -28,7 +27,7 @@ default_args = {
     "depends_on_past": False,
     "email_on_failure": False,
     "email_on_retry": False,
-    "retries": 1,
+    "retries": 1,  # Added retry
     "retry_delay": timedelta(minutes=5),
 }
 
@@ -81,9 +80,12 @@ def extract_and_upload_ga4_data(**context):
         df = pd.DataFrame(data)
 
         # Convert DataFrame to JSON string
-        json_buffer = StringIO()
-        df.to_json(json_buffer, orient="records", lines=True)
-        json_data = json_buffer.getvalue()
+        # Ensure each record is on a new line and properly formatted
+        json_data = "\n".join(df.apply(lambda x: x.to_json(), axis=1))
+
+        # Debug logging
+        print("Sample of JSON data to be uploaded:")
+        print(json_data[:500])  # Print first 500 characters
 
         # Upload directly to GCS using GCSHook
         gcs_hook = GCSHook(gcp_conn_id="google_cloud_default")
