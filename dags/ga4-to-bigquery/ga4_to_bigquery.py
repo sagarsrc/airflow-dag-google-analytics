@@ -52,6 +52,7 @@ def extract_and_upload_ga4_data(**context):
         current_date = datetime.now().date()
         if execution_date > current_date:
             print(f"Warning: Requested date {date_str} is in the future")
+            return None  # Return None for future dates
 
         # Build request
         request = RunReportRequest(
@@ -74,14 +75,11 @@ def extract_and_upload_ga4_data(**context):
         # Debug logging for GA4 response
         print(f"GA4 Response for date {date_str}:")
         print(f"Row count: {len(response.rows)}")
-        if len(response.rows) > 0:
-            print("Sample row data:")
-            print(f"Dimensions: {response.rows[0].dimension_values}")
-            print(f"Metrics: {response.rows[0].metric_values}")
-        else:
-            print("No rows returned from GA4")
-            print("Dimension headers:", response.dimension_headers)
-            print("Metric headers:", response.metric_headers)
+
+        # Handle empty response case
+        if not response.rows:
+            print(f"No data returned from GA4 for this {date_str}")
+            return None
 
         # Convert to DataFrame
         data = []
@@ -96,19 +94,6 @@ def extract_and_upload_ga4_data(**context):
                 }
             )
 
-        # Handle empty data case
-        if not data:
-            print(f"No data found for date: {date_str}")
-            data = [
-                {
-                    "city": "NO_DATA",
-                    "date": date_str,
-                    "activeUsers": 0,
-                    "sessions": 0,
-                    "screenPageViews": 0,
-                }
-            ]
-
         df = pd.DataFrame(data)
         print(f"Number of rows in DataFrame: {len(df)}")
 
@@ -118,37 +103,41 @@ def extract_and_upload_ga4_data(**context):
             json_lines.append(row.to_json())
         json_data = "\n".join(json_lines)
 
-        # Debug logging
-        print("First few rows of JSON data:")
-        print("\n".join(json_lines[:3]))
+        # Generate GCS path
+        gcs_path = f"ga4_data/{date_str}/data.json"
 
         # Upload to GCS using GCSHook
         gcs_hook = GCSHook(gcp_conn_id="google_cloud_default")
-        gcs_path = f'ga4_data/{context["ds"]}/data.json'
 
-        # Upload using data parameter
-        gcs_hook.upload(
-            bucket_name=BUCKET_NAME,
-            object_name=gcs_path,
-            data=json_data.encode("utf-8"),
-        )
+        try:
+            # Upload using data parameter
+            gcs_hook.upload(
+                bucket_name=BUCKET_NAME,
+                object_name=gcs_path,
+                data=json_data.encode("utf-8"),
+            )
+            print(f"Successfully uploaded data to gs://{BUCKET_NAME}/{gcs_path}")
 
-        print(f"Successfully uploaded data to gs://{BUCKET_NAME}/{gcs_path}")
-        return gcs_path
+            # Explicitly push to XCom
+            context["task_instance"].xcom_push(key="gcs_path", value=gcs_path)
+            return gcs_path
+
+        except Exception as upload_error:
+            print(f"Failed to upload to GCS: {str(upload_error)}")
+            raise
 
     except Exception as e:
-        print(f"Error type: {type(e)}")
-        print(f"Error message: {str(e)}")
+        print(f"Error in extract_and_upload_ga4_data: {type(e)} - {str(e)}")
         raise
 
 
-def create_load_task(dag, write_disposition="WRITE_TRUNCATE", task_id_suffix=""):
+def create_load_task(dag, write_disposition="WRITE_TRUNCATE"):
     """Create a BigQuery load task with specified write disposition."""
     return GCSToBigQueryOperator(
-        task_id=f"load_to_bigquery{task_id_suffix}",
+        task_id=f"load_to_bigquery_{write_disposition.lower()}",
         bucket=BUCKET_NAME,
         source_objects=[
-            "{{ task_instance.xcom_pull(task_ids='extract_and_upload_ga4_data') }}"
+            "{{ task_instance.xcom_pull(task_ids='extract_and_upload_ga4_data', key='gcs_path') }}"
         ],
         destination_project_dataset_table=f"{PROJECT_ID}.custom_analytics_data.ga4_data${{{{ ds_nodash }}}}",
         source_format="NEWLINE_DELIMITED_JSON",
@@ -169,8 +158,8 @@ with DAG(
     default_args=default_args,
     description="Extract GA4 data and load to BigQuery",
     schedule_interval="@daily",
-    start_date=datetime(2024, 12, 16),  # YYYY-MM-DD format
-    end_date=datetime(2024, 12, 30),  # YYYY-MM-DD format
+    start_date=datetime(2024, 12, 16),  # Fixed date format
+    end_date=datetime(2024, 12, 30),  # Fixed date format
     catchup=True,
     max_active_runs=3,
     render_template_as_native_obj=True,
@@ -183,11 +172,8 @@ with DAG(
         provide_context=True,
     )
 
-    # Task 2a: Load to BigQuery (Truncate mode - default)
-    load_truncate_task = create_load_task(dag, "WRITE_TRUNCATE", "_truncate")
+    # Task 2: Load to BigQuery (Only using TRUNCATE mode)
+    load_task = create_load_task(dag, "WRITE_TRUNCATE")
 
-    # Task 2b: Load to BigQuery (Append mode)
-    load_append_task = create_load_task(dag, "WRITE_APPEND", "_append")
-
-    # Task dependencies - only truncate task is active by default
-    extract_and_upload_task >> load_truncate_task
+    # Set task dependencies
+    extract_and_upload_task >> load_task
