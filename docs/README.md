@@ -27,23 +27,25 @@ https://github.com/yral-dapp/data-science-directed-acyclic-graphs/blob/main/READ
 
 - On succesful creation of composer environment, your composer environment should look like this:
 
-![composer](../images/composer1.png)
+- On succesful creation of composer environment, your composer environment should look like this:
+
+![composer](./images/composer1.png)
 
 - Once you run the dags, your composer environment should look like this:
 
-![composer](../images/composer2.png)
+![composer](./images/composer2.png)
 
 - On successfull run of the dag, your airflow should look like this:
 
-![airflow](../images/airflow.png)
+![airflow](./images/airflow.png)
 
 - GCP bucket which holds events from google analytics should look like this:
 
-![gcp bucket](../images/gcp-ga4-bucket.png)
+![gcp bucket](./images/gcp-ga4-bucket.png)
 
 - bucket which holds dags and airflow logs should look like this:
 
-![gcp bucket](../images/gcp-dags-bucket.png)
+![gcp bucket](./images/gcp-dags-bucket.png)
 
 # Basic check data sanity
 
